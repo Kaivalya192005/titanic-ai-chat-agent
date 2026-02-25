@@ -3,84 +3,88 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-st.set_page_config(page_title="Titanic AI Agent", layout="wide")
-
-# ---------- LOAD DATA ----------
+# ---------- Load dataset ----------
 df = pd.read_csv("backend/titanic.csv")
 
-# ---------- TITLE ----------
+# ---------- Page ----------
+st.set_page_config(page_title="Titanic AI Agent", layout="wide")
+
 st.title("🚢 Titanic Dataset AI Agent")
 st.caption("Ask questions • Get insights • Generate visualizations")
 
-# ---------- SESSION ----------
+# ---------- Sidebar ----------
+with st.sidebar:
+    st.header("Controls")
+    if st.button("Clear Chat"):
+        st.session_state.messages = []
+
+    st.subheader("Try these")
+    q1 = st.button("How many passengers survived?")
+    q2 = st.button("Average fare?")
+    q3 = st.button("Show age distribution")
+
+# ---------- Chat history ----------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ---------- SIDEBAR ----------
-with st.sidebar:
-    st.header("Controls")
+# ---------- Handle predefined buttons ----------
+user_query = None
 
-    if st.button("Clear Chat"):
-        st.session_state.messages = []
-        st.rerun()
+if q1:
+    user_query = "survived"
 
-    st.subheader("Try these")
+if q2:
+    user_query = "average fare"
 
-    if st.button("How many passengers survived?"):
-        st.session_state.messages.append({"role":"user","content":"How many passengers survived?"})
+if q3:
+    user_query = "age distribution"
 
-    if st.button("Average fare?"):
-        st.session_state.messages.append({"role":"user","content":"Average fare?"})
+# ---------- Chat input ----------
+user_input = st.chat_input("Ask anything about Titanic dataset...")
 
-    if st.button("Show age distribution"):
-        st.session_state.messages.append({"role":"user","content":"Show age distribution"})
+if user_input:
+    user_query = user_input.lower()
 
-# ---------- DISPLAY CHAT ----------
-for msg in st.session_state.messages:
+# ---------- Process query ----------
+if user_query:
 
-    with st.chat_message(msg["role"]):
+    # Show user message
+    st.session_state.messages.append(("user", user_query))
 
-        if isinstance(msg["content"], dict):
-            st.write(msg["content"]["text"])
-            if msg["content"].get("image"):
-                st.pyplot(msg["content"]["image"])
-        else:
-            st.write(msg["content"])
+    response = ""
+    show_plot = False
 
-# ---------- INPUT ----------
-prompt = st.chat_input("Ask anything about Titanic dataset...")
+    if "surviv" in user_query:
+        survivors = df["Survived"].sum()
+        response = f"🟢 {survivors} passengers survived."
 
-if prompt:
+    elif "fare" in user_query:
+        avg_fare = df["Fare"].mean()
+        response = f"💰 Average fare: {avg_fare:.2f}"
 
-    st.session_state.messages.append({"role":"user","content":prompt})
-
-    answer = ""
-    image = None
-
-    # ---------- SIMPLE INTELLIGENCE ----------
-    q = prompt.lower()
-
-    if "survive" in q:
-        count = df["Survived"].sum()
-        answer = f"{count} passengers survived."
-
-    elif "fare" in q:
-        avg = df["Fare"].mean()
-        answer = f"Average fare: {avg:.2f}"
-
-    elif "age" in q or "distribution" in q:
-        fig, ax = plt.subplots()
-        sns.histplot(df["Age"].dropna(), bins=20, ax=ax)
-        ax.set_title("Age Distribution")
-        image = fig
-        answer = "Age distribution plotted."
+    elif "age" in user_query:
+        response = "📊 Age distribution:"
+        show_plot = True
 
     else:
-        answer = "I can answer questions about survival, fare, and age distribution."
+        response = "❌ I didn't understand. Try asking about survival, fare, or age."
 
-    st.session_state.messages.append({
-        "role":"assistant",
-        "content":{"text":answer, "image":image}
-    })
+    st.session_state.messages.append(("assistant", response))
 
-    st.rerun()
+    if show_plot:
+        fig, ax = plt.subplots()
+        sns.histplot(df["Age"].dropna(), bins=30, ax=ax)
+        ax.set_title("Age Distribution")
+        st.session_state.messages.append(("plot", fig))
+
+# ---------- Display chat ----------
+for role, msg in st.session_state.messages:
+
+    if role == "user":
+        st.chat_message("user").write(msg)
+
+    elif role == "assistant":
+        st.chat_message("assistant").write(msg)
+
+    elif role == "plot":
+        st.pyplot(msg)
