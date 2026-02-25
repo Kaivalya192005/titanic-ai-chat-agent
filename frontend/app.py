@@ -1,100 +1,86 @@
 import streamlit as st
-import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-# ================= PAGE CONFIG =================
-st.set_page_config(
-    page_title="Titanic AI Agent",
-    page_icon="🚢",
-    layout="wide"
-)
+st.set_page_config(page_title="Titanic AI Agent", layout="wide")
 
-API_URL = "http://127.0.0.1:8000/chat"
+# ---------- LOAD DATA ----------
+df = pd.read_csv("backend/titanic.csv")
 
-# ================= HEADER =================
+# ---------- TITLE ----------
 st.title("🚢 Titanic Dataset AI Agent")
 st.caption("Ask questions • Get insights • Generate visualizations")
 
-# ================= SIDEBAR =================
-with st.sidebar:
+# ---------- SESSION ----------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
+# ---------- SIDEBAR ----------
+with st.sidebar:
     st.header("Controls")
 
-    if st.button("Clear Chat", use_container_width=True):
+    if st.button("Clear Chat"):
         st.session_state.messages = []
         st.rerun()
-
-    st.divider()
 
     st.subheader("Try these")
 
     if st.button("How many passengers survived?"):
-        st.session_state.prefill = "How many passengers survived?"
+        st.session_state.messages.append({"role":"user","content":"How many passengers survived?"})
 
     if st.button("Average fare?"):
-        st.session_state.prefill = "Average fare?"
+        st.session_state.messages.append({"role":"user","content":"Average fare?"})
 
     if st.button("Show age distribution"):
-        st.session_state.prefill = "Show age distribution"
+        st.session_state.messages.append({"role":"user","content":"Show age distribution"})
 
-# ================= SESSION STATE =================
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "prefill" not in st.session_state:
-    st.session_state.prefill = ""
-
-# ================= CHAT DISPLAY =================
+# ---------- DISPLAY CHAT ----------
 for msg in st.session_state.messages:
 
-    role = msg["role"]
-    content = msg["content"]
+    with st.chat_message(msg["role"]):
 
-    with st.chat_message(role):
-
-        if isinstance(content, dict):
-            st.write(content["text"])
-
-            if content.get("image"):
-                st.image(content["image"], use_container_width=True)
+        if isinstance(msg["content"], dict):
+            st.write(msg["content"]["text"])
+            if msg["content"].get("image"):
+                st.pyplot(msg["content"]["image"])
         else:
-            st.write(content)
+            st.write(msg["content"])
 
-# ================= CHAT INPUT =================
+# ---------- INPUT ----------
 prompt = st.chat_input("Ask anything about Titanic dataset...")
 
-# Auto-fill from sidebar suggestions
-if st.session_state.prefill:
-    prompt = st.session_state.prefill
-    st.session_state.prefill = ""
-
-# ================= HANDLE INPUT =================
 if prompt:
 
-    # USER MESSAGE
+    st.session_state.messages.append({"role":"user","content":prompt})
+
+    answer = ""
+    image = None
+
+    # ---------- SIMPLE INTELLIGENCE ----------
+    q = prompt.lower()
+
+    if "survive" in q:
+        count = df["Survived"].sum()
+        answer = f"{count} passengers survived."
+
+    elif "fare" in q:
+        avg = df["Fare"].mean()
+        answer = f"Average fare: {avg:.2f}"
+
+    elif "age" in q or "distribution" in q:
+        fig, ax = plt.subplots()
+        sns.histplot(df["Age"].dropna(), bins=20, ax=ax)
+        ax.set_title("Age Distribution")
+        image = fig
+        answer = "Age distribution plotted."
+
+    else:
+        answer = "I can answer questions about survival, fare, and age distribution."
+
     st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
+        "role":"assistant",
+        "content":{"text":answer, "image":image}
     })
-
-    try:
-        res = requests.get(API_URL, params={"question": prompt})
-        data = res.json()
-
-        answer = data.get("answer", "")
-        image = data.get("image")
-
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": {
-                "text": answer,
-                "image": image
-            }
-        })
-
-    except Exception as e:
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": f"Error: {e}"
-        })
 
     st.rerun()
